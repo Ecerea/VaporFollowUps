@@ -5,24 +5,23 @@ extension Droplet {
     func setupRoutes() throws {
         
         get("patients") { request in
-            //Fake user
-//            let bytes: [UInt8] = [6,7,88,97,66,46,45]
-//            let patient = Patient(patientID: "Testing", providerID: "Testing", content: bytes)
-//            try patient.save()
-            
-            
-            let patients = try Patient.all()
-            var json = JSON()
-            let firstPatient = patients.first
-            guard let patientID = firstPatient?.patientID else {
+            //Decode request
+            guard let providerID = request.headers["providerID"] else {
                 return Response(status: .badRequest)
             }
-            guard let providerID = firstPatient?.providerID else {
-                return Response(status: .badRequest)
+            //Query database for all patients supplied by GET header
+            let patients = try Patient.makeQuery().filter("providerID",.equals, providerID).all()
+            
+            //Compose JSON to return for GET request.
+            var returnJSON = JSON()
+            for patient in patients {
+                var patientJSON = JSON()
+                try patientJSON.set("patientID", patient.patientID)
+                try patientJSON.set("providerID", patient.providerID)
+                try patientJSON.set("content", patient.content)
+                returnJSON[patient.patientID] = patientJSON
             }
-            try json.set(patientID, providerID)
-            try json.set("content", firstPatient?.content)
-            return json
+            return returnJSON
         }
         
         post("patient") { request in
@@ -36,17 +35,15 @@ extension Droplet {
             } catch {
                 return Response(status: .badRequest)
             }
-            print(json)
             guard let patientID = json["patientID"] as? String else {
                 return Response(status: .badRequest)
             }
-//            guard let providerID = json["providerID"] else {
-//                return Response(status: .badRequest)
-//            }
-            guard let content = json["results"] as? ByteData else {
+            guard let providerID = json["providerID"] else {
                 return Response(status: .badRequest)
             }
-            print(content)
+            guard let content = json["content"] as? ByteData else {
+                return Response(status: .badRequest)
+            }
             //Create New Patient
             let patient = Patient(patientID: patientID, providerID: "Testing", content: content)
             try patient.save()
@@ -63,7 +60,6 @@ extension Droplet {
             try testingJSON.set("patientID", patID)
             try testingJSON.set("providerID", proID)
             try testingJSON.set("content", firstPatient?.content)
-            print("Testing JSON \(testingJSON)")
             return testingJSON
         }
         get("hello") { req in
